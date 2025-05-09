@@ -1,6 +1,13 @@
 #include <stdio.h>
 
+#include "cjson/cJSON.h"
+
+#include "lib/logging.h"
 #include "lib/mc_loot.h"
+
+#include "cubiomes/finders.h"
+#include "cubiomes/biomes.h"
+#include "cubiomes/rng.h"
 
 static void print_loot(LootTableContext* ctx)
 {
@@ -17,11 +24,31 @@ static void print_loot(LootTableContext* ctx)
 	}
 }
 
-#include "cubiomes/finders.h"
-#include "cubiomes/biomes.h"
-#include "cubiomes/rng.h"
+static char* get_file(const char* path) {
+	FILE* file = fopen(path, "r");
+	if (file == NULL)
+		return NULL;
 
-uint64_t getLootSeed(uint64_t worldSeed, int cx, int cz, uint64_t index, uint64_t step) {
+	int file_size = 0;
+	for (char c = getc(file); c != EOF; c = getc(file))
+		file_size++;
+
+	fseek(file, 0, SEEK_SET);		// go back to the beginning of the file
+
+	// allocate memory for file contents
+	char* file_content = (char*)malloc(file_size + 1); // 1
+	if (file_content == NULL) {
+		return NULL;
+	}
+
+	// read the file content
+	fread(file_content, 1, file_size, file);
+	file_content[file_size] = '\0';
+	fclose(file);
+	return file_content;
+}
+
+uint64_t getLootSeed(uint64_t worldSeed, int cx, int cz, uint64_t index, uint64_t step, int chestIndex) {
 	Xoroshiro chunkRand;
 
 	// setPopulationSeed
@@ -34,56 +61,107 @@ uint64_t getLootSeed(uint64_t worldSeed, int cx, int cz, uint64_t index, uint64_
 	// setDecoratorSeed
 	xSetSeed(&chunkRand, populationSeed + index + 10000 * step);
 
+	for (int i = 0; i < chestIndex; i++) {
+		xNextLongJ(&chunkRand);
+	}
+
 	xNextIntJ(&chunkRand, 3);
 
 	return xNextLongJ(&chunkRand);
 }
 
-int main() {
-	LootTableContext ctx;
+int64_t spSeed = 0;
+int64_t spSearchX0 = 0;
+int64_t spSearchZ0 = 0;
+int64_t spSearchX1 = 0;
+int64_t spSearchZ1 = 0;
+const char* spLootTable = NULL;
+int64_t spStep = 0;
+int64_t spIndex = 0;
+int64_t spChestCount = 0;
+enum StructureType spStructure = Desert_Pyramid;
 
-	FILE* file = fopen("tables/desert_pyramid.json", "r");
-	int ret = init_loot_table_file(file, &ctx, (enum MCVersion)MC_1_21);
+void getConfig() {
+	const char* fileContent = get_file("config.json");
+	if (!fileContent) {
+		LOG_ERROR("failed to read config.json");
+		abort();
+	}
+
+	cJSON* cfg = cJSON_Parse(fileContent);
+
+	spLootTable = cJSON_GetStringValue(cJSON_GetObjectItem(cfg, "lootTable"));
+	spStructure = cJSON_GetNumberValue(cJSON_GetObjectItem(cfg, "structureID"));
+	spStep = cJSON_GetNumberValue(cJSON_GetObjectItem(cfg, "structureStep"));
+	spIndex = cJSON_GetNumberValue(cJSON_GetObjectItem(cfg, "structureIndex"));
+	spChestCount = cJSON_GetNumberValue(cJSON_GetObjectItem(cfg, "chestCount"));
+	spSeed = atoll(cJSON_GetStringValue(cJSON_GetObjectItem(cfg, "seed")));
+	spSearchX0 = atoll(cJSON_GetStringValue(cJSON_GetObjectItem(cfg, "searchX0")));
+	spSearchZ0 = atoll(cJSON_GetStringValue(cJSON_GetObjectItem(cfg, "searchZ0")));
+	spSearchX1 = atoll(cJSON_GetStringValue(cJSON_GetObjectItem(cfg, "searchX1")));
+	spSearchZ1 = atoll(cJSON_GetStringValue(cJSON_GetObjectItem(cfg, "searchZ1")));
+
+}
+
+int main() {
+	getConfig();
+
+	LootTableContext ctx;
+	FILE* file = fopen(spLootTable, "r");
+	int ret = init_loot_table_file(file, &ctx, MC_1_21_3);
 	fclose(file);
 	if (ret) {
 		printf("loot table did not init %d\n", ret);
 		abort();
 	}
+	printf("Loot table %s\n", spLootTable);
+	printf("Seed %lld\n", spSeed);
+
+	Generator g;
+	setupGenerator(&g, MC_1_21_3, 0);
+	applySeed(&g, DIM_OVERWORLD, spSeed);
+
+	StructureConfig structConf;
+	getStructureConfig(spStructure, MC_1_21_3, &structConf);
+
+	int sx0 = floordiv(spSearchX0, structConf.regionSize * 16);
+	int sz0 = floordiv(spSearchZ0, structConf.regionSize * 16);
+	int sx1 = floordiv((spSearchX1-1), structConf.regionSize * 16);
+	int sz1 = floordiv((spSearchZ1-1), structConf.regionSize * 16);
 
 
-// [System] [CHAT] Seed: [-3438928525885583395]
-// [System] [CHAT] The nearest minecraft:desert_pyramid is at [-3008, ~, -4880] (5731 blocks away)
-// [System] [CHAT] -2998, 61, -4868 has the following block data: {LootTable: "minecraft:chests/desert_pyramid", x: -2998, y: 61, z: -4868, id: "minecraft:chest", LootTableSeed: 5607812447116310305L}
-// [System] [CHAT] -3000, 61, -4870 has the following block data: {LootTable: "minecraft:chests/desert_pyramid", x: -3000, y: 61, z: -4870, id: "minecraft:chest", LootTableSeed: -4740816410992747849L}
-// [System] [CHAT] -2998, 61, -4872 has the following block data: {LootTable: "minecraft:chests/desert_pyramid", x: -2998, y: 61, z: -4872, id: "minecraft:chest", LootTableSeed: -7348923201375380957L}
-// [System] [CHAT] -2996, 61, -4870 has the following block data: {LootTable: "minecraft:chests/desert_pyramid", x: -2996, y: 61, z: -4870, id: "minecraft:chest", LootTableSeed: 1426284063932910835L}
+	printf("Search space from %d:%d to %d:%d structure regions\n", sx0, sz0, sx1, sz1);
 
+	for (int rx = sx0; rx < sx1; rx++) {
+		for (int rz = sz0; rz < sz1; rz++) {
+			Pos p;
+			int ok = getStructurePos(structConf.structType, MC_1_21_3, spSeed, rx, rz, &p);
+			if (!ok) {
+				continue;
+			}
+			if (!(p.x >= spSearchX0 && p.x < spSearchX1 && p.z >= spSearchZ0 && p.z < spSearchZ1)) {
+				continue;
+			}
+			int id = isViableStructurePos(structConf.structType, &g, p.x, p.z, 0);
+			if (!id) {
+				continue;
+			}
+			printf("Found structure at %d %d\n", p.x, p.z);
+			if (!isViableStructureTerrain(structConf.structType, &g, p.x, p.z)) {
+				continue;
+			}
 
-	int64_t worldSeed = 3438928525885583395;
-	int chestChunkX = -3008 >> 4;
-	int chestChunkZ = -4880 >> 4;
+			printf("Found structure at %ld %ld with following loot:\n", p.x, p.z);
+			for (int chestIndex = 0; chestIndex < spChestCount; chestIndex++) {
+				uint64_t lootSeed = getLootSeed(spSeed, p.x>>4, p.z>>4, spIndex, spStep, chestIndex);
+				printf("Chest %d %ld\n", chestIndex, lootSeed);
+				set_loot_seed(&ctx, lootSeed);
+				generate_loot(&ctx);
+				print_loot(&ctx);
+			}
+		}
+	}
 
-	// salts.txt step index *
-	uint64_t step = 4;
-	uint64_t index = 1;
-
-	uint64_t lootSeedShouldBe[] = {
-		5607812447116310305L,
-		-4740816410992747849L,
-		-7348923201375380957L,
-		1426284063932910835L
-	};
-
-	uint64_t gotLootSeed = getLootSeed(worldSeed, chestChunkX, chestChunkZ, index, step);
-	printf("got       loot seed %ld\n", gotLootSeed);
-	printf("should be loot seed %ld\n", lootSeedShouldBe[0]);
-	printf("should be loot seed %ld\n", lootSeedShouldBe[1]);
-	printf("should be loot seed %ld\n", lootSeedShouldBe[2]);
-	printf("should be loot seed %ld\n", lootSeedShouldBe[3]);
-
-	set_loot_seed(&ctx, gotLootSeed);
-	generate_loot(&ctx);
-	print_loot(&ctx);
 	free_loot_table(&ctx);
 	return 0;
 }

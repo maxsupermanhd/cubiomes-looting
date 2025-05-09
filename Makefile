@@ -1,13 +1,13 @@
 
 ARFLAGS = cr
-LDFLAGS = -L. -lloot_library -Lcubiomes/ -lcubiomes -lm
+LDFLAGS = -lm
 CFLAGS = -Wall -Wno-unused -Wextra -fwrapv
 
 .PHONY : all clean
 
 all: main
 
-main: main.o libloot_library.a
+main: main.o libloot_library.a cubiomes/libcubiomes.a
 	gcc $(LDFLAGS) $^ -o main
 
 main.o: main.c

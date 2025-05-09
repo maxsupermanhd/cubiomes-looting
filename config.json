@@ -1,0 +1,12 @@
+{
+	"lootTable": "tables/pillager_outpost.json",
+	"structureID": 10,
+	"structureStep": 4,
+	"structureIndex": 9,
+	"chestCount": 1,
+	"seed": "-3438928525885583395",
+	"searchX0": "0",
+	"searchZ0": "0",
+	"searchX1": "8000",
+	"searchZ1": "8000"
+}
