@@ -26,17 +26,17 @@ uint64_t getLootSeed(uint64_t worldSeed, int cx, int cz, uint64_t index, uint64_
 
 	// setPopulationSeed
 	xSetSeed(&chunkRand, worldSeed);
-	uint64_t l = xNextLong(&chunkRand) | 1ULL;
-	uint64_t m = xNextLong(&chunkRand) | 1ULL;
+	uint64_t l = xNextLongJ(&chunkRand) | 1ULL;
+	uint64_t m = xNextLongJ(&chunkRand) | 1ULL;
 	uint64_t populationSeed = ((cx*16) * l) + ((cz*16) * m ^ worldSeed);
 	xSetSeed(&chunkRand, populationSeed);
 
 	// setDecoratorSeed
 	xSetSeed(&chunkRand, populationSeed + index + 10000 * step);
 
-	xNextInt(&chunkRand, 3);
+	xNextIntJ(&chunkRand, 3);
 
-	return xNextLong(&chunkRand);
+	return xNextLongJ(&chunkRand);
 }
 
 int main() {
