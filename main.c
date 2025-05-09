@@ -60,8 +60,8 @@ int main() {
 
 
 	int64_t worldSeed = 3438928525885583395;
-	int chestChunkX = -3008;
-	int chestChunkZ = -4880;
+	int chestChunkX = -3008 >> 4;
+	int chestChunkZ = -4880 >> 4;
 
 	// salts.txt step index *
 	uint64_t step = 4;
